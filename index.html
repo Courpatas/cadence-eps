@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cadence EPS">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cadence EPS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout : viseur à gauche, tableau de bord à droite (paysage) ; empilés en portrait. */
+:root {
+  --bg: #eef2ee;
+  --surface: #ffffff;
+  --line: #d5ddd6;
+  --fg: #13201a;
+  --muted: #5d6b63;
+  --accent: #1d7a4c;
+  --accent-ink: #ffffff;
+  --rec: #d63a2f;
+  --warn: #b7791f;
+  --stage: #0b0f0d;
+  --display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1411; --surface: #17201b; --line: #2a362f; --fg: #e6eee8; --muted: #93a39a; --accent: #4cc48a; --accent-ink: #062014; --rec: #ff6a5e; --warn: #e3a83f; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; -webkit-text-size-adjust: 100%; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
+}
+@media (orientation: portrait), (max-width: 820px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; min-height: 100%; }
+  .stage { aspect-ratio: 16 / 10; }
+}
+
+/* ---- Viseur ---- */
+.stage { position: relative; background: var(--stage); border-radius: 16px; overflow: hidden; min-height: 0; color: #fff; }
+.stage video, .stage canvas.overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.hud { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; pointer-events: none; }
+.pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: rgba(11,15,13,.7); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 13px; font-weight: 500; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #8a958f; flex: none; }
+.dot.ok { background: #4cc48a; }
+.dot.wait { background: #e3a83f; }
+.dot.rec { background: #ff6a5e; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.hud-btns { display: flex; gap: 8px; pointer-events: auto; }
+.hud-btns button { border: 0; background: rgba(11,15,13,.7); color: #fff; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.tip { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: center; pointer-events: none; }
+.tip span { background: rgba(11,15,13,.72); padding: 8px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45; text-align: center; max-width: 52ch; }
+.big-live { position: absolute; right: 16px; bottom: 14px; font-family: var(--display); font-weight: 700; font-size: clamp(40px, 7vw, 76px); line-height: 1; text-shadow: 0 2px 18px rgba(0,0,0,.6); font-variant-numeric: tabular-nums; pointer-events: none; }
+.big-live small { font-family: var(--body); font-size: 15px; font-weight: 500; opacity: .85; margin-left: 4px; }
+
+.start { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: radial-gradient(120% 90% at 50% 100%, #173426 0%, var(--stage) 70%); }
+.start-inner { max-width: 46ch; display: grid; gap: 16px; justify-items: center; }
+.lanes { width: 160px; height: 46px; position: relative; }
+.lanes i { position: absolute; left: 0; right: 0; height: 2px; background: rgba(255,255,255,.35); }
+.lanes i:nth-child(1) { top: 0; } .lanes i:nth-child(2) { top: 22px; } .lanes i:nth-child(3) { bottom: 0; }
+.lanes b { position: absolute; top: 5px; width: 4px; height: 12px; border-radius: 2px; background: #4cc48a; }
+.start h1 { margin: 0; font-family: var(--display); font-size: clamp(28px, 4.4vw, 42px); letter-spacing: -.01em; text-wrap: balance; }
+.start p { margin: 0; color: rgba(255,255,255,.75); line-height: 1.55; }
+.start .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.start .err { color: #ffb4ab; font-size: 14px; }
+
+/* ---- Tableau de bord ---- */
+.panel { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.readout { display: flex; align-items: baseline; gap: 8px; }
+.readout .num { font-family: var(--display); font-weight: 700; font-size: 64px; line-height: .95; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.readout .unit { color: var(--muted); font-weight: 500; }
+.readout .num.stale { color: var(--muted); }
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.quality { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.quality i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.spark { width: 100%; height: 56px; display: block; }
+
+.field { display: grid; gap: 6px; }
+.field input { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 16px; }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 11px 16px; border-radius: 12px; font-weight: 600; font-size: 15px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.rec { background: var(--rec); border-color: var(--rec); color: #fff; }
+.btn.light { background: #fff; color: #0b0f0d; border-color: #fff; }
+.btn.ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.25); }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.wide { width: 100%; }
+.recinfo { font-size: 13px; color: var(--rec); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.result { border-color: var(--accent); }
+.result.bad { border-color: var(--warn); }
+.result .who { font-weight: 600; }
+.result .val { font-family: var(--display); font-weight: 700; font-size: 34px; font-variant-numeric: tabular-nums; }
+.result .meta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.list { display: grid; gap: 0; }
+.list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.list-row:first-child { border-top: 0; }
+.list-row .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row .s { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.list-row .c { font-family: var(--display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; text-align: right; }
+.list-row .c small { font-family: var(--body); font-size: 11px; font-weight: 500; color: var(--muted); }
+.chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
+.chip.bonne { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.chip.moyenne { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.chip.faible { background: color-mix(in srgb, var(--rec) 15%, transparent); color: var(--rec); }
+.del { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px 6px; }
+.empty { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: none; padding: 7px 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.foot { font-size: 12px; color: var(--muted); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .dot.rec { animation: none; } .quality i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas class="overlay" id="overlay"></canvas>
+    <div class="hud">
+      <span class="pill"><span class="dot" id="hudDot"></span><span id="hudText">Chargement du modèle de détection…</span></span>
+      <div class="hud-btns" id="hudBtns" hidden>
+        <button id="switchSrc">Changer de source</button>
+      </div>
+    </div>
+    <div class="tip" id="tip" hidden><span id="tipText"></span></div>
+    <div class="big-live" id="bigLive" hidden><span id="bigNum">—</span><small>pas/min</small></div>
+
+    <div class="start" id="start">
+      <div class="start-inner">
+        <div class="lanes" aria-hidden="true"><i></i><i></i><i></i><b style="left:20%"></b><b style="left:46%;top:29px"></b><b style="left:72%"></b></div>
+        <h1>Cadence EPS</h1>
+        <p>Filmez un élève de profil : l'application repère ses chevilles et affiche sa fréquence de course en pas par minute, en direct.</p>
+        <div class="row">
+          <button class="btn light" id="startCam">Démarrer la caméra</button>
+          <button class="btn ghost" id="pickVideo">Analyser une vidéo</button>
+        </div>
+        <p class="err" id="startErr" hidden></p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <section class="card" aria-live="polite">
+      <div class="label">Fréquence en direct</div>
+      <div class="readout"><span class="num stale" id="num">—</span><span class="unit">pas/min</span></div>
+      <div class="status"><span class="dot" id="stDot"></span><span id="stText">En attente</span></div>
+      <div class="quality" title="Régularité du signal"><i id="qBar"></i></div>
+      <canvas class="spark" id="spark" aria-hidden="true"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="label">Mesure d'un passage</div>
+      <label class="field"><span class="label" style="letter-spacing:.04em">Élève</span>
+        <input id="student" list="names" autocomplete="off" placeholder="Prénom ou n° de dossard">
+        <datalist id="names"></datalist>
+      </label>
+      <button class="btn primary wide" id="measure" disabled>Mesurer un passage</button>
+      <div class="recinfo" id="recInfo" hidden></div>
+      <div class="foot" id="measureHelp">Appuyez avant que l'élève entre dans le champ. La mesure s'arrête seule quand il en sort.</div>
+    </section>
+
+    <section class="card result" id="resultCard" hidden>
+      <div class="label" id="resultLabel">Dernière mesure</div>
+      <div class="who" id="resultWho"></div>
+      <div class="val" id="resultVal"></div>
+      <div class="meta" id="resultMeta"></div>
+    </section>
+
+    <section class="card">
+      <div class="row"><div class="label">Résultats de la séance</div><span class="spacer"></span>
+        <div class="seg" role="group" aria-label="Tri"><button id="sortTime" class="on">Récents</button><button id="sortName">A → Z</button></div>
+      </div>
+      <div class="list" id="list"></div>
+      <div class="row" id="listActions">
+        <button class="btn small" id="exportCsv">Exporter (CSV)</button>
+        <span class="spacer"></span>
+        <button class="btn small" id="clearAll">Tout effacer</button>
+      </div>
+      <div class="row" id="clearConfirm" hidden>
+        <span class="foot" style="flex:1">Effacer tous les résultats de cet iPad ?</span>
+        <button class="btn small" id="clearNo">Annuler</button>
+        <button class="btn small rec" id="clearYes">Effacer</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="label">Réglages</div>
+      <div class="row"><span style="flex:1">Modèle</span>
+        <div class="seg" role="group" aria-label="Modèle"><button id="mLite" class="on">Rapide</button><button id="mFull">Précis</button></div>
+      </div>
+      <div class="foot">Placez l'iPad fixe, de profil, à 6–10 m du couloir. L'élève doit être visible de la tête aux pieds pendant au moins 2 s (4 à 6 appuis).</div>
+    </section>
+  </aside>
+</div>
+
+<input type="file" id="fileInput" accept="video/*" hidden>
+
+<script type="module">
+import { analyzeSegment, analyzeRecording, reliability } from './cadence.js';
+
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODELS = {
+  lite: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+};
+const $ = id => document.getElementById(id);
+const video = $('video'), overlay = $('overlay'), octx = overlay.getContext('2d');
+
+let vision = null, landmarker = null, modelKind = 'lite', loading = null;
+let source = null; // 'camera' | 'file'
+let stream = null, running = false, lastTs = 0;
+let live = [];          // points {t, v} récents
+let lastPoseT = -1;     // dernier instant où un coureur a été vu (s)
+let shown = null;       // fréquence affichée (lissée)
+let lastEst = null;
+let rec = null;         // {name, pts, startedAt, source}
+let wakeLock = null;
+
+/* ---------------- Résultats ---------------- */
+const KEY = 'cadence-eps-resultats-v1';
+let results = [];
+let sortBy = 'time';
+try { results = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { results = []; }
+function saveResults() { try { localStorage.setItem(KEY, JSON.stringify(results)); } catch (e) {} }
+
+const fmt1 = x => x.toFixed(1).replace('.', ',');
+function fmtTime(t) { try { return new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+
+function renderList() {
+  const list = $('list'); list.innerHTML = '';
+  const rows = results.slice();
+  if (sortBy === 'name') rows.sort((a, b) => a.name.localeCompare(b.name, 'fr') || b.t - a.t);
+  else rows.sort((a, b) => b.t - a.t);
+  if (!rows.length) {
+    const p = document.createElement('div'); p.className = 'empty';
+    p.textContent = "Aucune mesure pour l'instant. Les passages mesurés s'ajoutent ici, avec l'heure et la fiabilité.";
+    list.append(p);
+  }
+  for (const r of rows) {
+    const row = document.createElement('div'); row.className = 'list-row';
+    const a = document.createElement('div');
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = r.name;
+    const chip = document.createElement('span'); chip.className = 'chip ' + r.rel; chip.textContent = r.rel; n.append(chip);
+    const s = document.createElement('div'); s.className = 's';
+    s.textContent = fmtTime(r.t) + ' · ' + r.steps + ' appuis en ' + fmt1(r.span) + ' s' + (r.source === 'file' ? ' · vidéo' : '');
+    a.append(n, s);
+    const c = document.createElement('div'); c.className = 'c'; c.textContent = r.cadence + ' '; const sm = document.createElement('small'); sm.textContent = 'pas/min'; c.append(sm);
+    const d = document.createElement('button'); d.className = 'del'; d.textContent = '×'; d.setAttribute('aria-label', 'Supprimer la mesure de ' + r.name);
+    d.onclick = () => { results = results.filter(x => x.id !== r.id); saveResults(); renderList(); };
+    row.append(a, c, d); list.append(row);
+  }
+  $('listActions').hidden = !results.length;
+  const dl = $('names'); dl.innerHTML = '';
+  [...new Set(results.map(r => r.name))].sort((a, b) => a.localeCompare(b, 'fr')).forEach(n => { const o = document.createElement('option'); o.value = n; dl.append(o); });
+}
+$('sortTime').onclick = () => { sortBy = 'time'; $('sortTime').classList.add('on'); $('sortName').classList.remove('on'); renderList(); };
+$('sortName').onclick = () => { sortBy = 'name'; $('sortName').classList.add('on'); $('sortTime').classList.remove('on'); renderList(); };
+$('clearAll').onclick = () => { $('listActions').hidden = true; $('clearConfirm').hidden = false; };
+$('clearNo').onclick = () => { $('clearConfirm').hidden = true; $('listActions').hidden = !results.length; };
+$('clearYes').onclick = () => { results = []; saveResults(); $('clearConfirm').hidden = true; renderList(); };
+$('exportCsv').onclick = () => {
+  const lines = ['Élève;Fréquence (pas/min);Appuis comptés;Durée analysée (s);Fiabilité;Source;Date;Heure'];
+  for (const r of results.slice().sort((a, b) => a.t - b.t)) {
+    const d = new Date(r.t);
+    lines.push([r.name.replace(/;/g, ','), r.cadence, r.steps, fmt1(r.span), r.rel, r.source === 'file' ? 'vidéo' : 'caméra',
+      d.toLocaleDateString('fr-FR'), d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })].join(';'));
+  }
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'cadence-eps-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+/* ---------------- Modèle ---------------- */
+function setHud(kind, text) { $('hudDot').className = 'dot ' + kind; $('hudText').textContent = text; }
+function setStatus(kind, text) { $('stDot').className = 'dot ' + kind; $('stText').textContent = text; }
+
+async function loadModel(kind) {
+  setHud('wait', 'Chargement du modèle de détection…');
+  if (!vision) {
+    const mod = await import(MP + '/vision_bundle.mjs');
+    vision = { mod, fileset: await mod.FilesetResolver.forVisionTasks(MP + '/wasm') };
+  }
+  const { PoseLandmarker } = vision.mod;
+  const opts = d => ({
+    baseOptions: { modelAssetPath: MODELS[kind], delegate: d },
+    runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+  });
+  let lm;
+  try { lm = await PoseLandmarker.createFromOptions(vision.fileset, opts('GPU')); }
+  catch (e) { lm = await PoseLandmarker.createFromOptions(vision.fileset, opts('CPU')); }
+  if (landmarker) try { landmarker.close(); } catch (e) {}
+  landmarker = lm; modelKind = kind; lastTs = 0;
+  setHud('ok', running ? hudSourceText() : 'Prêt');
+}
+function ensureModel() {
+  if (!loading) loading = loadModel(modelKind).catch(e => {
+    loading = null;
+    setHud('', 'Modèle non chargé');
+    showStartError("Le modèle de détection n'a pas pu être chargé. Vérifiez la connexion Internet puis rechargez la page.");
+    throw e;
+  });
+  return loading;
+}
+async function switchModel(kind) {
+  if (kind === modelKind && landmarker) return;
+  $('mLite').classList.toggle('on', kind === 'lite'); $('mFull').classList.toggle('on', kind === 'full');
+  modelKind = kind;
+  loading = loadModel(kind).catch(() => { setHud('', 'Modèle non chargé'); });
+  await loading;
+}
+$('mLite').onclick = () => switchModel('lite');
+$('mFull').onclick = () => switchModel('full');
+
+/* ---------------- Sources ---------------- */
+function showStartError(msg) { $('startErr').textContent = msg; $('startErr').hidden = false; $('start').hidden = false; }
+function hudSourceText() { return source === 'file' ? 'Analyse de la vidéo' : 'Caméra arrière'; }
+
+async function startCamera() {
+  $('startErr').hidden = true;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showStartError("La caméra n'est accessible que si la page est ouverte en https (ou en local). Ouvrez l'adresse publiée de l'application.");
+    return;
+  }
+  try {
+    stopAll();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
+    });
+  } catch (e) {
+    const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+    showStartError(denied
+      ? "L'accès à la caméra a été refusé. Autorisez-le dans Réglages › Safari › Caméra, puis rechargez la page."
+      : "Aucune caméra disponible sur cet appareil.");
+    return;
+  }
+  source = 'camera';
+  video.removeAttribute('src'); video.srcObject = stream; video.loop = false;
+  await video.play().catch(() => {});
+  begin();
+}
+
+function pickVideo() { $('fileInput').click(); }
+$('fileInput').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  stopAll();
+  source = 'file';
+  video.srcObject = null; video.src = URL.createObjectURL(f); video.loop = false;
+  video.playbackRate = 0.5; // plus d'images analysées par appui ; le temps de la vidéo reste exact
+  await new Promise(r => { video.onloadedmetadata = r; video.onerror = r; });
+  if (!video.videoWidth) { showStartError("Cette vidéo ne peut pas être lue par le navigateur."); return; }
+  begin();
+  const name = $('student').value.trim() || 'Vidéo ' + (results.filter(r => r.source === 'file').length + 1);
+  startRecording(name);
+  video.playbackRate = 0.5;
+  await video.play().catch(() => {});
+});
+video.addEventListener('ended', () => { if (source === 'file' && rec) finishRecording(); });
+
+function stopAll() {
+  running = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  if (video.src && video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
+  rec = null; live = []; shown = null; lastEst = null; lastPoseT = -1;
+  updateRecUi();
+}
+
+async function begin() {
+  $('start').hidden = true; $('hudBtns').hidden = false; $('bigLive').hidden = false;
+  $('measure').disabled = source !== 'camera';
+  $('measureHelp').textContent = source === 'camera'
+    ? "Appuyez avant que l'élève entre dans le champ. La mesure s'arrête seule quand il en sort."
+    : "La vidéo est analysée en entier au ralenti. Le résultat s'ajoute à la liste à la fin.";
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  await ensureModel().catch(() => {});
+  if (!landmarker) return;
+  overlay.width = video.videoWidth || 1280; overlay.height = video.videoHeight || 720;
+  setHud('ok', hudSourceText());
+  running = true; schedule();
+}
+$('startCam').onclick = startCamera;
+$('pickVideo').onclick = pickVideo;
+$('switchSrc').onclick = () => { stopAll(); video.pause(); octx.clearRect(0, 0, overlay.width, overlay.height); $('start').hidden = false; $('hudBtns').hidden = true; $('bigLive').hidden = true; $('tip').hidden = true; $('measure').disabled = true; setStatus('', 'En attente'); };
+document.addEventListener('visibilitychange', async () => {
+  if (!document.hidden && running) { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+});
+
+/* ---------------- Boucle d'analyse ---------------- */
+function schedule() {
+  if (!running) return;
+  if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
+  else requestAnimationFrame(now => onFrame(now, null));
+}
+function onFrame(now, meta) {
+  if (!running) return;
+  if (video.readyState >= 2 && landmarker && video.videoWidth) {
+    if (overlay.width !== video.videoWidth) { overlay.width = video.videoWidth; overlay.height = video.videoHeight; }
+    const t = source === 'file' ? (meta ? meta.mediaTime : video.currentTime) : now / 1000;
+    const ts = Math.max(lastTs + 1, Math.round(performance.now())); lastTs = ts;
+    let res = null;
+    try { res = landmarker.detectForVideo(video, ts); } catch (e) { res = null; }
+    handle(res, t);
+  }
+  schedule();
+}
+
+const LEFT = [[11, 23], [23, 25], [25, 27], [27, 29], [29, 31], [27, 31]];
+const RIGHT = [[12, 24], [24, 26], [26, 28], [28, 30], [30, 32], [28, 32]];
+
+function handle(res, t) {
+  const lm = res && res.landmarks && res.landmarks[0];
+  const W = video.videoWidth, H = video.videoHeight;
+  octx.clearRect(0, 0, W, H);
+  let ok = false, why = "Placez l'élève dans le champ, visible de la tête aux pieds.";
+  if (lm) {
+    const vis = [23, 24, 27, 28].map(i => lm[i].visibility ?? 1);
+    const P = i => ({ x: lm[i].x * W, y: lm[i].y * H });
+    const hL = P(23), hR = P(24), aL = P(27), aR = P(28);
+    const leg = (Math.hypot(hL.x - aL.x, hL.y - aL.y) + Math.hypot(hR.x - aR.x, hR.y - aR.y)) / 2;
+    const inFrame = [aL, aR].every(p => p.y < H * 0.99 && p.x > 0 && p.x < W);
+    if (Math.min(...vis) < 0.15 || vis.reduce((a, b) => a + b, 0) / 4 < 0.4) why = 'Jambes mal visibles : évitez les obstacles devant l’élève.';
+    else if (!inFrame) why = 'Les pieds sortent du cadre : reculez l’iPad ou inclinez-le vers le sol.';
+    else if (leg < H * 0.12) why = 'Élève trop loin : rapprochez l’iPad du couloir.';
+    else {
+      ok = true;
+      const v = Math.abs(aL.x - aR.x) / leg;
+      if (lastPoseT >= 0 && t - lastPoseT > 0.4) live = [];
+      if (live.length && t <= live[live.length - 1].t) live = [];
+      live.push({ t, v });
+      while (live.length && live[0].t < t - 4) live.shift();
+      if (rec) rec.pts.push({ t, v });
+      lastPoseT = t;
+    }
+    drawPose(lm, W, H, ok);
+  }
+  if (!ok && lastPoseT >= 0 && t - lastPoseT > 1.2) { live = []; }
+
+  // Estimation en direct sur les 3 dernières secondes
+  const win = live.filter(p => p.t >= t - 3);
+  const est = ok && win.length > 15 ? analyzeSegment(win) : null;
+  if (est && est.conf >= 0.35) {
+    shown = shown == null ? est.cadence : shown + (est.cadence - shown) * 0.25;
+    lastEst = est;
+  } else if (!ok && (lastPoseT < 0 || t - lastPoseT > 1.5)) {
+    shown = null; lastEst = null;
+  }
+  const txt = shown == null ? '—' : String(Math.round(shown));
+  $('num').textContent = txt; $('bigNum').textContent = txt;
+  $('num').classList.toggle('stale', !(est && est.conf >= 0.35));
+  $('qBar').style.width = (lastEst ? Math.round(Math.max(0, Math.min(1, lastEst.conf)) * 100) : 0) + '%';
+  if (rec) setStatus('rec', 'Mesure en cours');
+  else if (est && est.conf >= 0.35) setStatus('ok', 'Coureur suivi · fiabilité ' + reliability(est.conf));
+  else if (ok) setStatus('wait', 'Coureur repéré, calcul en cours…');
+  else setStatus('', 'En attente d’un coureur');
+  $('tip').hidden = ok; $('tipText').textContent = why;
+  drawSpark(t);
+
+  // Fin automatique d'un passage (caméra)
+  if (rec && source === 'camera') {
+    const span = rec.pts.length ? rec.pts[rec.pts.length - 1].t - rec.pts[0].t : 0;
+    const elapsed = performance.now() / 1000 - rec.startedAt;
+    if ((span >= 2 && t - lastPoseT > 0.8) || elapsed > 25) finishRecording();
+    else updateRecUi(span);
+  } else if (rec) {
+    updateRecUi(rec.pts.length ? rec.pts[rec.pts.length - 1].t - rec.pts[0].t : 0);
+  }
+}
+
+function drawPose(lm, W, H, ok) {
+  const css = getComputedStyle(document.documentElement);
+  const lw = Math.max(3, W / 300);
+  const draw = (pairs, color) => {
+    octx.strokeStyle = color; octx.lineWidth = lw; octx.lineCap = 'round';
+    for (const [a, b] of pairs) {
+      octx.beginPath(); octx.moveTo(lm[a].x * W, lm[a].y * H); octx.lineTo(lm[b].x * W, lm[b].y * H); octx.stroke();
+    }
+  };
+  draw(LEFT, ok ? '#4cc48a' : 'rgba(255,255,255,.6)');
+  draw(RIGHT, ok ? '#f2c14e' : 'rgba(255,255,255,.6)');
+  for (const i of [27, 28]) {
+    octx.fillStyle = i === 27 ? '#4cc48a' : '#f2c14e';
+    octx.beginPath(); octx.arc(lm[i].x * W, lm[i].y * H, lw * 2.4, 0, Math.PI * 2); octx.fill();
+  }
+}
+
+const spark = $('spark'), sctx = spark.getContext('2d');
+function drawSpark(t) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = spark.clientWidth, h = spark.clientHeight;
+  if (spark.width !== Math.round(w * dpr)) { spark.width = Math.round(w * dpr); spark.height = Math.round(h * dpr); }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.clearRect(0, 0, w, h);
+  const css = getComputedStyle(document.documentElement);
+  sctx.strokeStyle = css.getPropertyValue('--line'); sctx.lineWidth = 1;
+  sctx.beginPath(); sctx.moveTo(0, h - 0.5); sctx.lineTo(w, h - 0.5); sctx.stroke();
+  if (live.length < 2) return;
+  const t0 = t - 4;
+  let lo = Infinity, hi = -Infinity;
+  for (const p of live) { lo = Math.min(lo, p.v); hi = Math.max(hi, p.v); }
+  const pad = (hi - lo) * 0.15 || 0.1;
+  const X = tt => ((tt - t0) / 4) * w, Y = v => h - 4 - ((v - lo + pad) / (hi - lo + 2 * pad)) * (h - 8);
+  sctx.strokeStyle = css.getPropertyValue('--accent'); sctx.lineWidth = 2; sctx.lineJoin = 'round';
+  sctx.beginPath(); live.forEach((p, i) => i ? sctx.lineTo(X(p.t), Y(p.v)) : sctx.moveTo(X(p.t), Y(p.v))); sctx.stroke();
+  if (lastEst && lastEst.peaks) {
+    sctx.fillStyle = css.getPropertyValue('--fg');
+    for (const pt of lastEst.peaks) { if (pt >= t0) sctx.fillRect(X(pt) - 1, 0, 2, 7); }
+  }
+}
+
+/* ---------------- Mesure d'un passage ---------------- */
+function startRecording(name) {
+  rec = { name, pts: [], startedAt: performance.now() / 1000 };
+  updateRecUi(0);
+}
+function updateRecUi(span) {
+  const b = $('measure');
+  if (rec) {
+    b.textContent = source === 'file' ? 'Arrêter l’analyse' : 'Arrêter la mesure';
+    b.className = 'btn rec wide'; b.disabled = false;
+    $('recInfo').hidden = false;
+    $('recInfo').textContent = rec.pts.length ? 'Enregistrement · ' + fmt1(span || 0) + ' s de course analysées' : 'Enregistrement · en attente de l’élève…';
+  } else {
+    b.textContent = 'Mesurer un passage'; b.className = 'btn primary wide'; b.disabled = source !== 'camera' || !running;
+    $('recInfo').hidden = true;
+  }
+}
+$('measure').onclick = () => {
+  if (rec) { finishRecording(); return; }
+  const name = $('student').value.trim() || 'Élève ' + (results.length + 1);
+  startRecording(name);
+};
+function finishRecording() {
+  const r = rec; rec = null;
+  if (source === 'file') video.pause();
+  updateRecUi();
+  const a = r && r.pts.length ? analyzeRecording(r.pts) : null;
+  const card = $('resultCard'); card.hidden = false;
+  if (!a) {
+    card.classList.add('bad');
+    $('resultLabel').textContent = 'Mesure impossible';
+    $('resultWho').textContent = r ? r.name : '';
+    $('resultVal').textContent = '—';
+    $('resultMeta').textContent = 'L’élève doit être visible en entier pendant au moins 2 s de course régulière. Recommencez le passage.';
+    return;
+  }
+  const entry = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: r.name, cadence: Math.round(a.cadence),
+    steps: a.steps, span: Math.round(a.span * 10) / 10, rel: reliability(a.conf), t: Date.now(), source };
+  results.push(entry); saveResults(); renderList();
+  card.classList.toggle('bad', entry.rel === 'faible');
+  $('resultLabel').textContent = 'Dernière mesure';
+  $('resultWho').textContent = entry.name;
+  $('resultVal').textContent = entry.cadence + ' pas/min';
+  $('resultMeta').textContent = entry.steps + ' appuis en ' + fmt1(entry.span) + ' s · fiabilité ' + entry.rel + (entry.rel === 'faible' ? ' : à refaire' : '');
+  if (source === 'camera') $('student').value = '';
+}
+
+renderList();
+ensureModel().then(() => { if (!running) setHud('ok', 'Prêt'); }).catch(() => {});
+</script>
+</body>
+</html>
